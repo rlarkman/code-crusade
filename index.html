@@ -180,7 +180,7 @@
         <div class="stat-box"><span id="score">00000</span></div>
     </div>
 
-    <div id="multiplier-display" style="display: none;">3x MULTIPLIER</div>
+    <div id="multiplier-display" style="display: none;">3x BOT MULTIPLIER!</div>
 
     <div id="toast-container"></div>
 
@@ -213,12 +213,14 @@
         gitlab: new Image(),
         logo: new Image(),
         dinoCloud: new Image(),
-        horizon: new Image()
+        horizon: new Image(),
+        bot: new Image()
     };
     images.chris.src = 'images/chris.png';
     images.pipe.src = 'images/pipe.png';
     images.gitlab.src = 'images/gitlab.png';
     images.logo.src = 'images/show-logo.png';
+    images.bot.src = 'images/bot.png';
     images.dinoCloud.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC4AAAAOCAQAAAD6HOaKAAAAU0lEQVR4XrWSsQkAQAgD3X9El/ELixQpJHCfdApnUCtXz7o49cgagaGPaq4rIwAP9s/C7R7UX3inJ0BDb6qWDC7ScOR/QWjRlFizuPwLtTLj+qkH6DjD2wLtikUAAAAASUVORK5CYII=';
     images.horizon.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAAMAgMAAAAPCKxBAAAABlBMVEX///9TU1NYzE1OAAAAAXRSTlMAQObYZgAAALJJREFUeF7t1EEKAyEMhtEvMNm7sPfJEVyY+1+ltLgYAsrQCtWhbxEhQvgxIJtSZypxa/WGshgzKdbq/UihMFMlt3o/CspEYoihIMaAb6mCvM6C+BTAeyo+wN4yykV/6pVfkdLpVyI1hh7GJ6QunUoLEQlQglNP2nkQkeF8+ei9cLxMue1qxVRfk1Ej0s6AEGWfVOk0QUtnK5Xo0Lac6wpdtnQqB6VxomPaz+dgF1PaqqmeWJlz1jYUaSIAAAAASUVORK5CYII=';
 
@@ -369,14 +371,7 @@
         }
         update() { this.x -= currentSpeed * 0.9; }
         draw() {
-            ctx.save();
-            ctx.fillStyle = '#585858';
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 10px Courier';
-            ctx.textAlign = 'center';
-            ctx.fillText('BOT', this.x + this.width/2, this.y + 20);
-            ctx.restore();
+            ctx.drawImage(images.bot, Math.floor(this.x), Math.floor(this.y), this.width, this.height);
         }
     }
 
