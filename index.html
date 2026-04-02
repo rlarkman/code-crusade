@@ -228,7 +228,7 @@
     let gameLoopId;
     let lastTime = 0;
     let bgOffset = 0;
-    let currentSpeed = 13;
+    let currentSpeed = 9;
     let groundX = [0, 600];
     
     // Physics
@@ -423,7 +423,7 @@
         botPowerups = [];
         logoTimer = 2000; // Delay first logo spawn
         botPowerupTimer = 10000 + Math.random() * 10000;
-        currentSpeed = 13;
+        currentSpeed = 9;
         groundX = [0, 600];
         player = new Player();
         lastTime = performance.now();
@@ -582,7 +582,7 @@
         let multiplier = player.botActiveTimer > 0 ? 3 : 1;
         multiplierDisplayEl.style.display = multiplier > 1 ? 'block' : 'none';
         score += 0.15 * multiplier;
-        currentSpeed += 0.003;
+        currentSpeed += 0.002;
         
         const floorScore = Math.floor(score);
         if (floorScore !== lastDisplayedScore) {
