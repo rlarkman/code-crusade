@@ -200,7 +200,7 @@
     </div>
 </div>
 
-<p style="font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #585858; opacity: 0.7; margin-top: 12px; display: flex; align-items: center; gap: 5px; justify-content: center;">
+<p id="game-tip" style="font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #585858; opacity: 0.7; margin-top: 12px; display: flex; align-items: center; gap: 5px; justify-content: center;">
     <b>Tip:</b> Catch the Domane Bot <img src="images/bot.png" style="width: 18px; height: 18px; vertical-align: middle; filter: grayscale(100%);"> to gain a 3x multiplier!
 </p>
 
@@ -431,6 +431,7 @@
         lastTime = performance.now();
         document.getElementById('start-menu').style.display = 'none';
         document.getElementById('game-over').style.display = 'none';
+        document.getElementById('game-tip').style.display = 'none';
         requestAnimationFrame(update);
     }
 
@@ -455,6 +456,7 @@
     function endGame(reason) {
         gameState = 'GAMEOVER';
         document.getElementById('game-over').style.display = 'flex';
+        document.getElementById('game-tip').style.display = 'flex';
         document.getElementById('game-over-title').innerText = gameOverTitles[Math.floor(Math.random() * gameOverTitles.length)];
         document.getElementById('final-score').innerText = Math.floor(score);
         document.getElementById('fail-reason').innerText = reason;
