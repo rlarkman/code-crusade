@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline Master: Chris’ Code Crusade</title>
+    <style>
+        :root {
+            --bg-color: #f7f7f7;
+            --primary: #fc6d26; /* GitLab Orange */
+            --secondary: #585858;
+            --text: #585858;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 600px;
+            height: 150px;
+            background: var(--bg-color);
+            overflow: hidden;
+            margin-top: 50px;
+        }
+
+        canvas {
+            display: block;
+            background: var(--bg-color);
+            image-rendering: pixelated;
+            filter: grayscale(100%);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 30px 15px 15px 15px;
+            box-sizing: border-box;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            color: var(--secondary);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 18px;
+        }
+
+        .stat-box span {
+            color: var(--secondary);
+            font-size: inherit;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+            color: var(--secondary);
+        }
+
+        h1 { margin: 0; font-size: 1.2em; font-weight: normal; }
+        h2 { margin: 5px 0 20px 0; font-size: 0.9em; font-weight: normal; opacity: 0.7; }
+
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: #4c8efa;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            background: #3266d5;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        #toast-container {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        .toast {
+            background: #333;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-top: 5px;
+            animation: fadeUp 1.5s forwards;
+            font-size: 11px;
+        }
+
+        @keyframes fadeUp {
+            0% { opacity: 0; transform: translateY(10px); }
+            20% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+
+        #high-score-display {
+            margin-top: 10px;
+            font-size: 12px;
+            opacity: 0.6;
+        }
+
+        #dino-style-meta {
+            max-width: 600px;
+            margin: 20px auto;
+            font-family: Helvetica, Arial, sans-serif;
+            color: #585858;
+            text-align: center;
+        }
+
+        .offline-icon {
+            width: 160px;
+            height: 170px;
+            background-image: url('images/chris.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            margin: 0 auto 20px auto;
+            filter: grayscale(100%);
+        }
+
+        #multiplier-display {
+            position: absolute;
+            top: 5px;
+            right: 15px;
+            font-size: 24px;
+            color: #4c8efa;
+            font-weight: 900;
+            text-shadow: 1px 1px 0px #fff, 2px 2px 4px rgba(76, 142, 250, 0.4);
+            animation: multiplierPulse 0.4s infinite alternate;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        @keyframes multiplierPulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="dino-style-meta">
+    <div class="offline-icon"></div>
+    <img src="images/pipeline-master-title.png" alt="Pipeline Master" style="width: 60%; height: auto;">
+    <h1 style="font-family: 'Arial Black', sans-serif;">Chris’ Code Crusade</h1>
+</div>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="600" height="150"></canvas>
+    
+    <div id="ui-layer">
+        <div class="stat-box">HI <span id="hi-score">00000</span></div>
+        <div class="stat-box"><span id="score">00000</span></div>
+    </div>
+
+    <div id="multiplier-display" style="display: none;">3x MULTIPLIER</div>
+
+    <div id="toast-container"></div>
+
+    <div id="start-menu" class="overlay">
+        <button onclick="startGame()">Start Build</button>
+        <div id="high-score-display"></div>
+    </div>
+
+    <div id="game-over" class="overlay" style="display:none;">
+        <h1 id="game-over-title">Build Failed!</h1>
+        <p id="fail-reason" style="font-size: 12px; margin: 10px 0;"></p>
+        <p style="font-size: 12px; opacity: 0.8;">Final Score: <span id="final-score">0</span></p>
+        <button onclick="startGame()" style="margin-top:10px;">Retry</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const scoreEl = document.getElementById('score');
+    const hiScoreEl = document.getElementById('hi-score');
+    const multiplierDisplayEl = document.getElementById('multiplier-display');
+    let lastDisplayedScore = -1;
+
+    // Assets
+    const images = {
+        chris: new Image(),
+        pipe: new Image(),
+        gitlab: new Image(),
+        logo: new Image(),
+        dinoCloud: new Image(),
+        horizon: new Image()
+    };
+    images.chris.src = 'images/chris.png';
+    images.pipe.src = 'images/pipe.png';
+    images.gitlab.src = 'images/gitlab.png';
+    images.logo.src = 'images/show-logo.png';
+    images.dinoCloud.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC4AAAAOCAQAAAD6HOaKAAAAU0lEQVR4XrWSsQkAQAgD3X9El/ELixQpJHCfdApnUCtXz7o49cgagaGPaq4rIwAP9s/C7R7UX3inJ0BDb6qWDC7ScOR/QWjRlFizuPwLtTLj+qkH6DjD2wLtikUAAAAASUVORK5CYII=';
+    images.horizon.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAAMAgMAAAAPCKxBAAAABlBMVEX///9TU1NYzE1OAAAAAXRSTlMAQObYZgAAALJJREFUeF7t1EEKAyEMhtEvMNm7sPfJEVyY+1+ltLgYAsrQCtWhbxEhQvgxIJtSZypxa/WGshgzKdbq/UihMFMlt3o/CspEYoihIMaAb6mCvM6C+BTAeyo+wN4yykV/6pVfkdLpVyI1hh7GJ6QunUoLEQlQglNP2nkQkeF8+ei9cLxMue1qxVRfk1Ej0s6AEGWfVOk0QUtnK5Xo0Lac6wpdtnQqB6VxomPaz+dgF1PaqqmeWJlz1jYUaSIAAAAASUVORK5CYII=';
+
+    // Game State
+    let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+    let score = 0;
+    let gameLoopId;
+    let lastTime = 0;
+    let bgOffset = 0;
+    let currentSpeed = 13;
+    let groundX = [0, 600];
+    
+    // Physics
+    const GROUND_Y = 127; 
+    const GRAVITY = 1.2;
+    const JUMP_FORCE = -16;
+
+    class Player {
+        constructor() {
+            this.width = 44;
+            this.height = 47;
+            this.x = 50;
+            this.y = GROUND_Y - this.height;
+            this.vy = 0;
+            this.isAirborne = false;
+            this.animTimer = 0;
+            this.step = false;
+            this.botReady = false;
+            this.botActiveTimer = 0;
+        }
+
+        jump() {
+            if (!this.isAirborne) {
+                this.vy = JUMP_FORCE;
+                this.isAirborne = true;
+                this.step = false;
+            }
+        }
+
+        update(deltaTime) {
+            this.vy += GRAVITY;
+            this.y += this.vy;
+
+            if (this.botActiveTimer > 0) {
+                this.botActiveTimer -= deltaTime;
+            }
+
+            if (this.y > GROUND_Y - this.height) {
+                this.y = GROUND_Y - this.height;
+                this.vy = 0;
+                this.isAirborne = false;
+            }
+
+            // Running animation logic: toggle step based on speed
+            if (!this.isAirborne) {
+                this.animTimer += deltaTime;
+                const msPerStep = 1000 / (currentSpeed * 2); 
+                if (this.animTimer > msPerStep) {
+                    this.step = !this.step;
+                    this.animTimer = 0;
+                }
+            }
+        }
+
+        draw() {
+            if (this.botActiveTimer > 0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width * 0.8, 0, Math.PI * 2);
+                ctx.strokeStyle = '#585858';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.restore();
+            }
+            // If stepping, lift the character slightly (2px) to simulate running gait
+            const runY = (this.step && !this.isAirborne) ? -2 : 0;
+            ctx.drawImage(images.chris, Math.floor(this.x), Math.floor(this.y + runY), this.width, this.height);
+        }
+    }
+
+    class Obstacle {
+        constructor(type) {
+            this.type = 'pipe'; 
+            this.width = 30;
+            this.height = 50;
+            this.x = canvas.width + 100;
+            this.y = GROUND_Y - this.height;
+        }
+        update() { this.x -= currentSpeed; }
+        draw() {
+            ctx.drawImage(images.pipe, Math.floor(this.x), Math.floor(this.y), this.width, this.height);
+        }
+    }
+
+    class Bonus {
+        constructor() {
+            this.width = 30;
+            this.height = 30;
+            this.x = canvas.width + 100;
+            this.y = GROUND_Y - 70 - Math.random() * 30;
+        }
+        update() { this.x -= currentSpeed * 0.8; }
+        draw() {
+            ctx.drawImage(images.gitlab, Math.floor(this.x), Math.floor(this.y), this.width, this.height);
+        }
+    }
+
+    class Cloud {
+        constructor() {
+            this.width = 46;
+            this.height = 14;
+            this.x = canvas.width;
+            this.y = 30 + Math.random() * 41; // Dino sky range (30-71px)
+            this.cloudGap = 100 + Math.random() * 300; // Dino gaps (100-400px)
+        }
+        update() { this.x -= currentSpeed * 0.2; } // Fixed speed factor (0.2) to prevent overtaking
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = 0.7;
+            ctx.drawImage(images.dinoCloud, Math.floor(this.x), Math.floor(this.y), this.width, this.height);
+            ctx.restore();
+        }
+    }
+
+    class Logo {
+        constructor() {
+            this.width = 60;
+            this.height = 20;
+            this.x = canvas.width + 100;
+            this.y = 10 + Math.random() * 15; // High sky to avoid clouds
+            this.speed = currentSpeed * 0.12;
+        }
+        update() { this.x -= this.speed; }
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = 0.3; 
+            ctx.drawImage(images.logo, Math.floor(this.x), Math.floor(this.y), this.width, this.height);
+            ctx.restore();
+        }
+    }
+
+    class BotPowerup {
+        constructor() {
+            this.width = 30;
+            this.height = 30;
+            this.x = canvas.width + 100;
+            this.y = GROUND_Y - 90 - Math.random() * 20;
+        }
+        update() { this.x -= currentSpeed * 0.9; }
+        draw() {
+            ctx.save();
+            ctx.fillStyle = '#585858';
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 10px Courier';
+            ctx.textAlign = 'center';
+            ctx.fillText('BOT', this.x + this.width/2, this.y + 20);
+            ctx.restore();
+        }
+    }
+
+    let player = new Player();
+    let obstacles = [];
+    let bonuses = [];
+    let clouds = [];
+    let bgLogos = [];
+    let botPowerups = [];
+    let obstacleTimer = 0;
+    let bonusTimer = 0;
+    let logoTimer = 0;
+    let botPowerupTimer = 0;
+
+    const bonusMessages = [
+        "JSON Reformatted!",
+        "Template Metadata Fixed!",
+        "Timestamp Normalized!",
+        "Validation Passed!",
+        "Pattern Regex Fixed!",
+        "Template Repaired!",
+        "Change Rolled Back!",
+        "Conflicts Resolved!",
+        "Prod Push Merged!",
+        "MR Approved!"
+    ];
+
+    function showToast(msg) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerText = msg;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 1500);
+    }
+
+    function startGame() {
+        gameState = 'PLAYING';
+        score = 0;
+        obstacles = [];
+        bonuses = [];
+        clouds = [];
+        bgLogos = [];
+        botPowerups = [];
+        logoTimer = 2000; // Delay first logo spawn
+        botPowerupTimer = 10000 + Math.random() * 10000;
+        currentSpeed = 13;
+        groundX = [0, 600];
+        player = new Player();
+        lastTime = performance.now();
+        document.getElementById('start-menu').style.display = 'none';
+        document.getElementById('game-over').style.display = 'none';
+        requestAnimationFrame(update);
+    }
+
+    const gameOverTitles = [
+        "GitLab Wins. Again.",
+        "Rebased Into Oblivion.",
+        "Pipeline: 1. You: 0.",
+        "Force Pushed Out of Existence.",
+        "Your Branch Has Been Deleted.",
+        "Squashed and Merged... You.",
+        "Runner Timed Out on You.",
+        "Access Denied by GitLab.",
+        "You've Been Reverted.",
+        "Pushed to /dev/null.",
+        "GitLab Has Closed Your MR.",
+        "Protected Branch. You Are Not.",
+        "CI Said No.",
+        "Merge Conflict: GitLab Won.",
+        "Your Commit Was Rejected.",
+    ];
+
+    function endGame(reason) {
+        gameState = 'GAMEOVER';
+        document.getElementById('game-over').style.display = 'flex';
+        document.getElementById('game-over-title').innerText = gameOverTitles[Math.floor(Math.random() * gameOverTitles.length)];
+        document.getElementById('final-score').innerText = Math.floor(score);
+        document.getElementById('fail-reason').innerText = reason;
+        
+        const highScores = JSON.parse(localStorage.getItem('cc_highscores') || '[]');
+        highScores.push(Math.floor(score));
+        highScores.sort((a,b) => b-a);
+        localStorage.setItem('cc_highscores', JSON.stringify(highScores.slice(0, 5)));
+        updateHighScoreUI();
+    }
+
+    function updateHighScoreUI() {
+        const highScores = JSON.parse(localStorage.getItem('cc_highscores') || '[]');
+        const hiScore = highScores.length > 0 ? highScores[0] : 0;
+        hiScoreEl.textContent = hiScore.toString().padStart(5, '0');
+        
+        const display = document.getElementById('high-score-display');
+        if (highScores.length > 0) {
+            display.innerHTML = 'Personal Best: ' + hiScore;
+        }
+    }
+
+    function update(time) {
+        if (gameState !== 'PLAYING') return;
+        const deltaTime = time - lastTime;
+        lastTime = time;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Ground Scrolling
+        groundX[0] -= currentSpeed;
+        groundX[1] -= currentSpeed;
+        if (groundX[0] <= -600) groundX[0] = groundX[1] + 600;
+        if (groundX[1] <= -600) groundX[1] = groundX[0] + 600;
+        ctx.drawImage(images.horizon, 0, 0, 600, 12, groundX[0], GROUND_Y, 600, 12);
+        ctx.drawImage(images.horizon, 0, 0, 600, 12, groundX[1], GROUND_Y, 600, 12);
+
+        // Clouds logic: Gap-based spawning like Dino game
+        if (clouds.length < 6) { // Max 6 clouds
+            let lastCloud = clouds[clouds.length - 1];
+            if (!lastCloud || (canvas.width - lastCloud.x > lastCloud.cloudGap && Math.random() > 0.5)) {
+                clouds.push(new Cloud());
+            }
+        }
+        clouds.forEach((cloud, index) => {
+            cloud.update();
+            cloud.draw();
+            if (cloud.x < -100) clouds.splice(index, 1);
+        });
+
+        // Occasional Logo logic
+        logoTimer -= deltaTime || 0;
+        if (logoTimer <= 0) {
+            bgLogos.push(new Logo());
+            logoTimer = 5000 + Math.random() * 8000; 
+        }
+
+        bgLogos.forEach((logo, index) => {
+            logo.update();
+            logo.draw();
+            if (logo.x < -100) bgLogos.splice(index, 1);
+        });
+
+        player.update(deltaTime);
+        player.draw();
+
+        // Spawning logic
+        obstacleTimer -= deltaTime || 0;
+        if (obstacleTimer <= 0) {
+            obstacles.push(new Obstacle());
+            obstacleTimer = 700 + Math.random() * 800;
+        }
+
+        bonusTimer -= deltaTime || 0;
+        if (bonusTimer <= 0) {
+            bonuses.push(new Bonus());
+            bonusTimer = 2200 + Math.random() * 2000; // 2.2-4.2s
+        }
+
+        // Obstacles & Collision
+        obstacles.forEach((obs, index) => {
+            obs.update();
+            obs.draw();
+            if (obs.x < -100) obstacles.splice(index, 1);
+
+            if (obs.x < player.x + player.width - 15 && obs.x + obs.width > player.x + 15 &&
+                obs.y < player.y + player.height - 15 && obs.y + obs.height > player.y + 15) {
+                endGame("");
+            }
+        });
+
+        // Bonuses
+        bonuses.forEach((b, index) => {
+            b.update();
+            b.draw();
+            if (b.x < -100) bonuses.splice(index, 1);
+
+            if (b.x < player.x + player.width && b.x + b.width > player.x &&
+                b.y < player.y + player.height && b.y + b.height > player.y) {
+                bonuses.splice(index, 1);
+                score += 100;
+                const msg = bonusMessages[Math.floor(Math.random() * bonusMessages.length)];
+                showToast(msg);
+            }
+        });
+
+        // Bot Powerup logic
+        botPowerupTimer -= deltaTime || 0;
+        if (botPowerupTimer <= 0) {
+            botPowerups.push(new BotPowerup());
+            botPowerupTimer = 15000 + Math.random() * 10000;
+        }
+
+        botPowerups.forEach((bp, index) => {
+            bp.update();
+            bp.draw();
+            if (bp.x < -100) botPowerups.splice(index, 1);
+
+            if (bp.x < player.x + player.width && bp.x + bp.width > player.x &&
+                bp.y < player.y + player.height && bp.y + bp.height > player.y) {
+                botPowerups.splice(index, 1);
+                player.botActiveTimer = 10000; // 10 seconds
+                showToast("DOMANE BOT ACTIVATED: 3X SCORE!");
+            }
+        });
+
+        let multiplier = player.botActiveTimer > 0 ? 3 : 1;
+        multiplierDisplayEl.style.display = multiplier > 1 ? 'block' : 'none';
+        score += 0.15 * multiplier;
+        currentSpeed += 0.003;
+        
+        const floorScore = Math.floor(score);
+        if (floorScore !== lastDisplayedScore) {
+            scoreEl.textContent = floorScore.toString().padStart(5, '0');
+            lastDisplayedScore = floorScore;
+            if (floorScore > 0 && floorScore % 100 === 0) showToast("Checkpoint!");
+        }
+
+        requestAnimationFrame(update);
+    }
+
+    // Controls
+    window.addEventListener('keydown', (e) => { 
+        if (e.code === 'Space') {
+            e.preventDefault();
+            player.jump(); 
+        }
+    });
+    canvas.addEventListener('mousedown', () => player.jump());
+    
+    updateHighScoreUI();
+</script>
+</body>
+</html>

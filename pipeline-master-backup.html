@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline Master: Chris’ Code Crusade</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --primary: #fc6d26; /* GitLab Orange */
+            --secondary: #1f232a;
+            --text: #333;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 400px;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 4px solid var(--secondary);
+        }
+
+        canvas {
+            display: block;
+            background: #fafafa;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            color: var(--secondary);
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 14px;
+        }
+
+        .stat-box span {
+            color: var(--primary);
+            font-size: 18px;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 { margin: 0; color: var(--secondary); }
+        h2 { margin: 0 0 20px 0; color: var(--primary); font-size: 1.2em; }
+
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #e24329;
+            transform: scale(1.05);
+        }
+
+        #toast-container {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        .toast {
+            background: var(--secondary);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-top: 5px;
+            animation: fadeUp 1.5s forwards;
+            font-size: 12px;
+        }
+
+        @keyframes fadeUp {
+            0% { opacity: 0; transform: translateY(10px); }
+            20% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+
+        #high-scores {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    
+    <div id="ui-layer">
+        <div class="stat-box">Score: <span id="score">0</span></div>
+        <div class="stat-box">Health: <span id="health">100</span>%</div>
+        <div class="stat-box">Conflicts: <span id="conflicts">0</span></div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <div id="start-menu" class="overlay">
+        <h1>Pipeline Master</h1>
+        <h2>Chris’ Code Crusade</h2>
+        <p>Avoid Merge Conflicts & Pipes to push to Prod!</p>
+        <button onclick="startGame()">Start Deployment</button>
+        <div id="high-score-display"></div>
+    </div>
+
+    <div id="game-over" class="overlay" style="display:none;">
+        <h1>Build Failed!</h1>
+        <p id="fail-reason">Too many merge conflicts in production.</p>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <button onclick="startGame()">Retry Rebase</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // DOM Cache for performance
+    const scoreEl = document.getElementById('score');
+    const healthEl = document.getElementById('health');
+    const conflictsEl = document.getElementById('conflicts');
+    let lastDisplayedScore = -1;
+    let lastDisplayedHealth = -1;
+    let lastDisplayedConflicts = -1;
+
+    // Assets
+    const images = {
+        chris: new Image(),
+        pipe: new Image(),
+        gitlab: new Image(),
+        logo: new Image()
+    };
+    images.chris.src = 'images/chris.png';
+    images.pipe.src = 'images/pipe.png';
+    images.gitlab.src = 'images/gitlab.png';
+    images.logo.src = 'images/show-logo.png';
+
+    // Game State
+    let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+    let score = 0;
+    let health = 100;
+    let conflicts = 0;
+    let gameLoopId;
+    let lastTime = 0;
+    let bgOffset = 0;
+    
+    // Physics
+    const GROUND_Y = canvas.height - 80;
+    const GRAVITY = 1.2;
+    const JUMP_FORCE = -20;
+
+    class Player {
+        constructor() {
+            this.width = 60;
+            this.height = 60;
+            this.x = 80;
+            this.y = GROUND_Y - this.height;
+            this.vy = 0;
+            this.isAirborne = false;
+            this.shielded = 0; // Domane Shield timer
+        }
+
+        jump() {
+            if (!this.isAirborne) {
+                this.vy = JUMP_FORCE;
+                this.isAirborne = true;
+            }
+        }
+
+        update() {
+            this.vy += GRAVITY;
+            this.y += this.vy;
+
+            if (this.y > GROUND_Y - this.height) {
+                this.y = GROUND_Y - this.height;
+                this.vy = 0;
+                this.isAirborne = false;
+            }
+
+            if (this.shielded > 0) this.shielded--;
+        }
+
+        draw() {
+            if (this.shielded > 0) {
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, this.y + this.height/2, 40, 0, Math.PI*2);
+                ctx.strokeStyle = 'rgba(0, 150, 255, 0.5)';
+                ctx.lineWidth = 5;
+                ctx.stroke();
+            }
+            ctx.drawImage(images.chris, this.x, this.y, this.width, this.height);
+        }
+    }
+
+    class Obstacle {
+        constructor(type) {
+            this.type = type; // 'pipe' or 'gitlab'
+            this.width = type === 'pipe' ? 50 : 40;
+            this.height = type === 'pipe' ? 70 : 40;
+            this.x = canvas.width + 100;
+            this.y = GROUND_Y - this.height;
+            this.speed = 9 + (score / 300);
+        }
+        update() { this.x -= this.speed; }
+        draw() {
+            const img = this.type === 'pipe' ? images.pipe : images.gitlab;
+            ctx.drawImage(img, this.x, this.y, this.width, this.height);
+        }
+    }
+
+    class Bonus {
+        constructor() {
+            this.width = 30;
+            this.height = 30;
+            this.x = canvas.width + 100;
+            this.y = GROUND_Y - 120 - Math.random() * 100;
+            this.speed = 8;
+        }
+        update() { this.x -= this.speed; }
+        draw() {
+            // Domane Bot Support Icon (Blue square for visual clarity if no bot image)
+            ctx.fillStyle = '#00c3ff';
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('D', this.x + 8, this.y + 22);
+        }
+    }
+
+    let player = new Player();
+    let obstacles = [];
+    let bonuses = [];
+    let obstacleTimer = 0;
+    let bonusTimer = 0;
+
+    function showToast(msg) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerText = msg;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 1500);
+    }
+
+    function startGame() {
+        gameState = 'PLAYING';
+        score = 0;
+        health = 100;
+        conflicts = 0;
+        obstacles = [];
+        bonuses = [];
+        player = new Player();
+        lastTime = performance.now();
+        document.getElementById('start-menu').style.display = 'none';
+        document.getElementById('game-over').style.display = 'none';
+        requestAnimationFrame(update);
+    }
+
+    function endGame(reason) {
+        gameState = 'GAMEOVER';
+        document.getElementById('game-over').style.display = 'flex';
+        document.getElementById('final-score').innerText = Math.floor(score);
+        document.getElementById('fail-reason').innerText = reason;
+        
+        const highScores = JSON.parse(localStorage.getItem('cc_highscores') || '[]');
+        highScores.push(Math.floor(score));
+        highScores.sort((a,b) => b-a);
+        localStorage.setItem('cc_highscores', JSON.stringify(highScores.slice(0, 5)));
+        updateHighScoreUI();
+    }
+
+    function updateHighScoreUI() {
+        const highScores = JSON.parse(localStorage.getItem('cc_highscores') || '[]');
+        const display = document.getElementById('high-score-display');
+        if (highScores.length > 0) {
+            display.innerHTML = '<p>High Scores:</p>' + highScores.map(s => `<div>${s}</div>`).join('');
+        }
+    }
+
+    function update(time) {
+        if (gameState !== 'PLAYING') return;
+        const deltaTime = time - lastTime;
+        lastTime = time;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Background Tiling (Logo)
+        bgOffset = (bgOffset - 3) % 200;
+        ctx.globalAlpha = 0.05;
+        for(let i = -1; i < canvas.width / 200 + 1; i++) {
+            ctx.drawImage(images.logo, i * 200 + bgOffset, 50, 150, 50);
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Ground
+        ctx.fillStyle = '#ddd';
+        ctx.fillRect(0, GROUND_Y, canvas.width, 80);
+
+        player.update();
+        player.draw();
+
+        // Spawning logic
+        obstacleTimer -= deltaTime || 0;
+        if (obstacleTimer <= 0) {
+            const type = Math.random() > 0.5 ? 'pipe' : 'gitlab';
+            obstacles.push(new Obstacle(type));
+            obstacleTimer = 400 + Math.random() * 600; // 400-1000ms
+        }
+
+        bonusTimer -= deltaTime || 0;
+        if (bonusTimer <= 0) {
+            bonuses.push(new Bonus());
+            bonusTimer = 2200 + Math.random() * 2000; // 2.2-4.2s
+        }
+
+        // Obstacles & Collision
+        obstacles.forEach((obs, index) => {
+            obs.update();
+            obs.draw();
+            if (obs.x < -100) obstacles.splice(index, 1);
+
+            if (obs.x < player.x + player.width - 10 && obs.x + obs.width > player.x + 10 &&
+                obs.y < player.y + player.height - 10 && obs.y + obs.height > player.y + 10) {
+                obstacles.splice(index, 1);
+                const damage = player.shielded > 0 ? 5 : 20;
+                health -= damage;
+                conflicts++;
+                showToast(player.shielded > 0 ? "Shield Absorbed Chaos!" : "MERGE CONFLICT!");
+                if (health <= 0) endGame("Build failed: Critical Merge Conflicts.");
+            }
+        });
+
+        // Bonuses
+        bonuses.forEach((b, index) => {
+            b.update();
+            b.draw();
+            if (b.x < -100) bonuses.splice(index, 1);
+
+            if (b.x < player.x + player.width && b.x + b.width > player.x &&
+                b.y < player.y + player.height && b.y + b.height > player.y) {
+                bonuses.splice(index, 1);
+                player.shielded = 300; // Domane Shield
+                health = Math.min(100, health + 10);
+                score += 100;
+                showToast("Domane Shield: Linting Fixed!");
+            }
+        });
+
+        score += 0.1;
+        
+        // Optimized UI Refresh: only touch the DOM when values change
+        const floorScore = Math.floor(score);
+        if (floorScore !== lastDisplayedScore) {
+            scoreEl.textContent = floorScore;
+            lastDisplayedScore = floorScore;
+        }
+        if (health !== lastDisplayedHealth) {
+            healthEl.textContent = health;
+            lastDisplayedHealth = health;
+        }
+        if (conflicts !== lastDisplayedConflicts) {
+            conflictsEl.textContent = conflicts;
+            lastDisplayedConflicts = conflicts;
+        }
+
+        requestAnimationFrame(update);
+    }
+
+    // Controls
+    window.addEventListener('keydown', (e) => { 
+        if (e.code === 'Space') {
+            e.preventDefault();
+            player.jump(); 
+        }
+    });
+    canvas.addEventListener('mousedown', () => player.jump());
+    
+    updateHighScoreUI();
+</script>
+</body>
+</html>
