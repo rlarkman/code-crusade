@@ -190,7 +190,10 @@
     </div>
 
     <div id="game-over" class="overlay" style="display:none;">
-        <h1 id="game-over-title">Build Failed!</h1>
+        <div style="display: flex; align-items: center; gap: 8px; justify-content: center;">
+            <img src="images/gitlab.png" style="width: 24px; height: 24px; filter: grayscale(100%);">
+            <h1 id="game-over-title">Build Failed!</h1>
+        </div>
         <p id="fail-reason" style="font-size: 12px; margin: 10px 0;"></p>
         <p style="font-size: 12px; opacity: 0.8;">Final Score: <span id="final-score">0</span></p>
         <button onclick="startGame()" style="margin-top:10px;">Retry</button>
